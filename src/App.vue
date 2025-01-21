@@ -10,15 +10,15 @@
       <thead>
         <tr>
           <th>Hora/Día</th>
-          <th v-for="day in days" :key="day">{{ day }}</th>
+          <th v-for="dayId in daysId" :key="dayId">{{ getDaysName(dayId) }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="hourId in hoursId" :key="hourId">
           <td>{{ getTimeSlot(hourId) }}</td>
           <td
-            v-for="day in days"
-            :key="day"
+            v-for="dayId in daysId"
+            :key="dayId"
             class="cell"
             @click="selectSlot(day, hourId)">
 
@@ -95,7 +95,8 @@ table {
 export default {
   data() {
     return {
-      days: [1, 2, 3, 4, 5], //Dias de la semana en numero
+      daysId: [], //Dias de la semana en numero
+      daysName: [],
       timeSlots:[],
       hoursId: [], //Horas del dia en numero
       recursos: [],
@@ -206,6 +207,7 @@ export default {
     // Llama a la API cuando el componente se monte
     this.getResources();
     this.getTimeRanges()
+    this.getDaysOfTheWeek()
   },
 };
 </script>
