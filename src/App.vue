@@ -10,19 +10,19 @@
       <thead>
         <tr>
           <th>Hora/Día</th>
-          <th v-for="day in days" :key="day">{{ day }}</th>
+          <th v-for="dayId in daysId" :key="dayId">{{ getDaysName(dayId) }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="hourId in hoursId" :key="hourId">
           <td>{{ getTimeSlot(hourId) }}</td>
           <td
-            v-for="day in days"
-            :key="day"
+            v-for="dayId in daysId"
+            :key="dayId"
             class="cell"
-            @click="selectSlot(day, hourId)">
-            <div v-if="reservations[day]?.[hourId]">
-              {{ reservations[day][hourId].name }} ({{ reservations[day][hourId].students }})
+            @click="selectSlot(dayId, hourId)">
+            <div v-if="reservations[dayId]?.[hourId]">
+              {{ reservations[dayId][hourId].name }} ({{ reservations[dayId][hourId].students }})
             </div>
           </td>
         </tr>
@@ -85,7 +85,8 @@ table {
 export default {
   data() {
     return {
-      days: [1, 2, 3, 4, 5], //Dias de la semana en numero
+      daysId: [], //Dias de la semana en numero
+      daysName: [],
       timeSlots:[],
       hoursId: [], //Horas del dia en numero
       recursos: [],
@@ -139,6 +140,34 @@ export default {
         alert("Hubo un error al obtener las horas. Intenta nuevamente.");
       }
     },
+
+    async getDaysOfTheWeek() {
+      try {
+        const response = await fetch(
+          "http://localhost:8085/bookings/previous_resources/days_week"
+        );
+        if (!response.ok) {
+          throw new Error("Error al obtener los días de la semana");
+        }
+        const data = await response.json(); // Convierte la respuesta a JSON
+        if (data && data.length > 0) {
+          this.daysId = data.map((item) => item.id);
+          this.daysName = data.map((item) => item.diasDeLaSemana);
+        } else {
+          console.error("Datos de días de la semana vacíos o inválidos.");
+        }
+      } catch (error) {
+        console.error("Error al obtener los días:", error);
+        alert("Hubo un error al obtener los días. Intenta nuevamente.");
+      }
+    },
+
+
+    getDaysName(dayId){
+      const index = this.daysId.indexOf(dayId);
+      return index !== -1 ? this.daysName[index] : ""; // Retorna el timeSlot correspondiente
+    },
+
     async confirmReservation() {
       try {
     const recursoSeleccionado = document.getElementById("roles").value;
@@ -183,6 +212,7 @@ export default {
     // Llama a la API cuando el componente se monte
     this.getResources();
     this.getTimeRanges()
+    this.getDaysOfTheWeek()
   },
 };
 </script>
