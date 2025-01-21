@@ -21,8 +21,10 @@
             :key="day"
             class="cell"
             @click="selectSlot(day, hourId)">
+
             <div v-if="reservations[day]?.[hourId]">
               {{ reservations[day][hourId].name }} ({{ reservations[day][hourId].students }})
+              <button class="delete-btn" @click.stop="deleteReservation(day, hourId)">X</button>
             </div>
           </td>
         </tr>
@@ -79,6 +81,14 @@ table {
   border-radius: 8px;
   box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.3);
 }
+.delete-btn {
+  background-color: red;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  margin-left: 5px;
+  cursor: pointer;
+}
 </style>
 
 <script>
@@ -99,15 +109,13 @@ export default {
     };
   },
   methods: {
-    getTimeSlot(hourId) {
-      const index = this.hoursId.indexOf(hourId);
-      return index !== -1 ? this.timeSlots[index] : ""; // Retorna el timeSlot correspondiente
-    },
+    //Este metodo selecciona la combinacion de hora y dia y abre el popup con esos datos
     selectSlot(day, hour) {
       this.selectedSlot = { day, hour };
-      this.students = 0; // Reinicia la cantidad
-      this.showModal = true; // Muestra el modal
+      this.students = 0;
+      this.showModal = true;
     },
+    //Este metodo rellena en combobox con los recursos de aulas
     async getResources() {
       try {
         const response = await fetch(
@@ -116,13 +124,14 @@ export default {
         if (!response.ok) {
           throw new Error("Error al obtener recursos de la API");
         }
-        const data = await response.json(); // Convierte la respuesta a JSON
-        this.recursos = data.map((item) => item.aulaYCarritos); // Extrae solo los nombres
+        const data = await response.json();
+        this.recursos = data.map((item) => item.aulaYCarritos);
       } catch (error) {
         console.error("Error al obtener recursos:", error);
         alert("Hubo un error al obtener los recursos. Intenta nuevamente.");
       }
     },
+    //Este metodo obtiene los ids y las horas de los tramos de la BDD
     async getTimeRanges(){
       try {
         const response = await fetch(
@@ -131,19 +140,25 @@ export default {
         if (!response.ok) {
           throw new Error("Error al obtener recursos de la API");
         }
-        const data = await response.json(); // Convierte la respuesta a JSON
-        this.hoursId = data.map((item) => item.id); // Extrae los id
-        this.timeSlots = data.map((item) => item.tramosHorarios); // Extrae los tramos
+        const data = await response.json();
+        this.hoursId = data.map((item) => item.id); 
+        this.timeSlots = data.map((item) => item.tramosHorarios);
       } catch (error) {
         console.error("Error al obtener horas:", error);
         alert("Hubo un error al obtener las horas. Intenta nuevamente.");
       }
     },
+    //Este metodo convierte la hora mostrando en la columna de las filas a su tramo correspondiente
+    getTimeSlot(hourId) {
+      const index = this.hoursId.indexOf(hourId);
+      return index !== -1 ? this.timeSlots[index] : "";
+    },
+    //Este metodo confirma una reserva en base a los datos actuales y lo mete en BDD
     async confirmReservation() {
       try {
     const recursoSeleccionado = document.getElementById("roles").value;
 
-    // Enviar los datos como encabezados
+   
     const response = await fetch('http://localhost:8085/bookings/previous_resources/bookings', {
       method: 'POST',
       headers: {
@@ -157,28 +172,36 @@ export default {
     });
 
     if (!response.ok) {
-      // Manejo de errores del servidor
+
       const errorData = await response.json();
       alert('Error al reservar: ' + (errorData.message || 'Error desconocido.'));
       return false;
     }
 
-    // Si el envío fue exitoso, redirigir al usuario
+    if (!this.reservations[this.selectedSlot.day]) {
+          this.reservations[this.selectedSlot.day] = {};
+        }
+        this.reservations[this.selectedSlot.day][this.selectedSlot.hour] = {
+          name: this.currentUser,
+          students: this.students,
+    };
+    
     alert('Reserva completada');
     this.closeModal();
     
   } catch (error) {
-    // Manejo de errores de red
     console.error('Error al conectarse a la API:', error);
     alert('Hubo un error al conectarse al servidor. Intenta nuevamente más tarde.');
     return false;
   }
       this.closeModal();
     },
+    //Este metodo cierra el popup
   closeModal() {
       this.showModal = false;
     },
   },
+  //El metodo mounted ejecuta los metodos de obtencion de datos al iniciar el despliegue
   mounted() {
     // Llama a la API cuando el componente se monte
     this.getResources();
