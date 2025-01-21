@@ -14,15 +14,15 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="hour in hours" :key="hour">
-          <td>{{ hour }}</td>
+        <tr v-for="hourId in hoursId" :key="hourId">
+          <td>{{ getTimeSlot(hourId) }}</td>
           <td
             v-for="day in days"
             :key="day"
             class="cell"
-            @click="selectSlot(day, hour)">
-            <div v-if="reservations[day]?.[hour]">
-              {{ reservations[day][hour].name }} ({{ reservations[day][hour].students }})
+            @click="selectSlot(day, hourId)">
+            <div v-if="reservations[day]?.[hourId]">
+              {{ reservations[day][hourId].name }} ({{ reservations[day][hourId].students }})
             </div>
           </td>
         </tr>
@@ -85,36 +85,104 @@ table {
 export default {
   data() {
     return {
-      days: ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"],
-      hours: ["08:00", "09:00", "10:00", "11:30", "12:30", "13:30"],
-      recursos: ["Biblioteca", "Aula 2.1", "Aula 0.9", "Carrito 1ª Planta", "Carrito 2ª Planta"],
+      days: [1, 2, 3, 4, 5], //Dias de la semana en numero
+      timeSlots:[],
+      hoursId: [], //Horas del dia en numero
+      recursos: [],
       reservations: {}, // Objeto para almacenar reservas
       showModal: false, // Controla si se muestra el modal
       selectedSlot: { day: "", hour: "" }, // Casilla seleccionada
       students: 0, // Número de alumnos
-      currentUser: "Usuario1", // Simulación del usuario logueado
+      currentUser: "Carlos", // Simulación del usuario logueado
+      currentUserEmail: "carlosevans@example.com", // Simulación del correo del usuario logueado
+
     };
   },
   methods: {
+    getTimeSlot(hourId) {
+      const index = this.hoursId.indexOf(hourId);
+      return index !== -1 ? this.timeSlots[index] : ""; // Retorna el timeSlot correspondiente
+    },
     selectSlot(day, hour) {
       this.selectedSlot = { day, hour };
       this.students = 0; // Reinicia la cantidad
       this.showModal = true; // Muestra el modal
     },
-    confirmReservation() {
-      const { day, hour } = this.selectedSlot;
-      if (!this.reservations[day]) {
-        this.$set(this.reservations, day, {});
+    async getResources() {
+      try {
+        const response = await fetch(
+          "http://localhost:8085/bookings/previous_resources/resources"
+        );
+        if (!response.ok) {
+          throw new Error("Error al obtener recursos de la API");
+        }
+        const data = await response.json(); // Convierte la respuesta a JSON
+        this.recursos = data.map((item) => item.aulaYCarritos); // Extrae solo los nombres
+      } catch (error) {
+        console.error("Error al obtener recursos:", error);
+        alert("Hubo un error al obtener los recursos. Intenta nuevamente.");
       }
-      this.$set(this.reservations[day], hour, {
-        name: this.currentUser,
-        students: this.students,
-      });
+    },
+    async getTimeRanges(){
+      try {
+        const response = await fetch(
+          "http://localhost:8085/bookings/previous_resources/timeslots"
+        );
+        if (!response.ok) {
+          throw new Error("Error al obtener recursos de la API");
+        }
+        const data = await response.json(); // Convierte la respuesta a JSON
+        this.hoursId = data.map((item) => item.id); // Extrae los id
+        this.timeSlots = data.map((item) => item.tramosHorarios); // Extrae los tramos
+      } catch (error) {
+        console.error("Error al obtener horas:", error);
+        alert("Hubo un error al obtener las horas. Intenta nuevamente.");
+      }
+    },
+    async confirmReservation() {
+      try {
+    const recursoSeleccionado = document.getElementById("roles").value;
+
+    // Enviar los datos como encabezados
+    const response = await fetch('http://localhost:8085/bookings/previous_resources/bookings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'email': this.currentUserEmail, // Header email requerido
+        'recurso': recursoSeleccionado, // Header recurso requerido
+        'diaDeLaSemana': this.selectedSlot.day, // Header diaDeLaSemana requerido
+        'tramosHorarios': this.selectedSlot.hour, // Header tramosHorarios requerido
+        'nAlumnos': this.students.toString(), // Header nAlumnos requerido (debe ser string en los headers)
+      },
+    });
+
+    if (!response.ok) {
+      // Manejo de errores del servidor
+      const errorData = await response.json();
+      alert('Error al reservar: ' + (errorData.message || 'Error desconocido.'));
+      return false;
+    }
+
+    // Si el envío fue exitoso, redirigir al usuario
+    alert('Reserva completada');
+    this.closeModal();
+    
+  } catch (error) {
+    // Manejo de errores de red
+    console.error('Error al conectarse a la API:', error);
+    alert('Hubo un error al conectarse al servidor. Intenta nuevamente más tarde.');
+    return false;
+  }
       this.closeModal();
     },
-    closeModal() {
+  closeModal() {
       this.showModal = false;
     },
+  },
+  mounted() {
+    // Llama a la API cuando el componente se monte
+    this.getResources();
+    this.getTimeRanges()
   },
 };
 </script>
