@@ -1,7 +1,7 @@
 <template>
   <div>
     <label for="roles" >Aula o carrico que quieres reservar </label>
-    <select id="roles" name="roles" aria-expanded="false">
+    <select id="roles"  v-model="selectedResource" @change="getReservationsByResource" aria-expanded="false">
       <option v-for="recurso in recursos" :key="recurso">{{recurso}}</option>
     </select>
   </div>
@@ -10,7 +10,7 @@
       <thead>
         <tr>
           <th>Hora/Día</th>
-          <th v-for="dayId in daysId" :key="dayId">{{ getDaysName(dayId) }}</th>
+          <th v-for="dayId in daysId" :key="dayId">{{ getdaysName(dayId) }}</th>
         </tr>
       </thead>
       <tbody>
@@ -20,11 +20,11 @@
             v-for="dayId in daysId"
             :key="dayId"
             class="cell"
-            @click="selectSlot(day, hourId)">
+            @click="selectSlot(dayId, hourId)">
 
-            <div v-if="reservations[day]?.[hourId]">
-              {{ reservations[day][hourId].name }} ({{ reservations[day][hourId].students }})
-              <button class="delete-btn" @click.stop="deleteReservation(day, hourId)">X</button>
+            <div v-if="reservations[dayId]?.[hourId]">
+              {{ reservations[dayId][hourId].name }} ({{ reservations[dayId][hourId].students }})
+              <button class="delete-btn" @click.stop="deleteReservation(dayId, hourId)">X</button>
             </div>
           </td>
         </tr>
@@ -56,13 +56,16 @@ table {
   margin-right: auto;
   width: 90vw;
   font-size: 20px;
+  background-color: #a7bcd3;
+  border: 1px solid #1722e9;
 }
 .cell {
   height: 60px;
+  width: 300px;
   cursor: pointer;
 }
 .cell:hover {
-  background-color: #f0f0f0;
+  background-color: #e9e572;
 }
 .modal {
   position: fixed;
@@ -96,10 +99,11 @@ export default {
   data() {
     return {
       daysId: [], //Dias de la semana en numero
-      daysName: [],
-      timeSlots:[],
+      daysName: [],//Nombre real de los dias
+      timeSlots:[],//Nombre real de los tramos horarios
       hoursId: [], //Horas del dia en numero
-      recursos: [],
+      recursos: [],//Recursos del combobox
+      selectedResource: "", // Recurso seleccionado
       reservations: {}, // Objeto para almacenar reservas
       showModal: false, // Controla si se muestra el modal
       selectedSlot: { day: "", hour: "" }, // Casilla seleccionada
@@ -127,6 +131,7 @@ export default {
         }
         const data = await response.json();
         this.recursos = data.map((item) => item.aulaYCarritos);
+        if (this.recursos.length > 0) this.selectedResource = this.recursos[0];
       } catch (error) {
         console.error("Error al obtener recursos:", error);
         alert("Hubo un error al obtener los recursos. Intenta nuevamente.");
@@ -154,6 +159,85 @@ export default {
       const index = this.hoursId.indexOf(hourId);
       return index !== -1 ? this.timeSlots[index] : "";
     },
+
+    //Este metodo obtiene los datos de los dias de la semana de la BDD
+    async getdaysOfTheWeek() {
+      try {
+        const response = await fetch(
+          "http://localhost:8085/bookings/previous_resources/days_week"
+        );
+        if (!response.ok) {
+          throw new Error("Error al obtener los días de la semana");
+        }
+        const data = await response.json();
+        if (data && data.length > 0) {
+          this.daysId = data.map((item) => item.id);
+          this.daysName = data.map((item) => item.diasDeLaSemana);
+        } else {
+          console.error("Datos de días de la semana vacíos o inválidos.");
+        }
+      } catch (error) {
+        console.error("Error al obtener los días:", error);
+        alert("Hubo un error al obtener los días. Intenta nuevamente.");
+      }
+    },
+
+    getdaysName(dayId){
+      const index = this.daysId.indexOf(dayId);
+      return index !== -1 ? this.daysName[index] : "";
+    },
+
+  //Este metodo rellena las celdas con las reservas segun lo que hay en el combobox
+    async getReservationsByResource() {
+  try {
+    const recursoSeleccionado = document.getElementById("roles").value;
+
+    const response = await fetch(
+      "http://localhost:8085/bookings/previous_resources/bookings",
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "aulaYCarritos": recursoSeleccionado,
+        },
+      }
+    );
+
+    if (!response.ok) throw new Error("Error al obtener reservas");
+
+    const data = await response.json();
+    //console.log("Datos recibidos:", data);
+
+    const reservasTransformadas = {};
+
+    data.forEach(function(reserva) {
+      const dia = reserva.diaSemana;
+      const tramo = reserva.tramoHorario;
+      const nombre = reserva.nombreYapellidos;
+      const alumnos = reserva.nalumnos;
+      //console.log("Procesando reserva:", dia, tramo, nombre, alumnos);
+
+      if (!reservasTransformadas[dia]) {
+        reservasTransformadas[dia] = {};
+      }
+      if(nombre != null){
+      reservasTransformadas[dia][tramo] = {
+        name: nombre || "Nulo",
+        students: alumnos || 0,    
+                            
+      };
+    }
+    });
+
+    //console.log("Reservas transformadas:", reservasTransformadas);
+    this.reservations = reservasTransformadas;
+
+  } catch (error) {
+    console.error("Error al obtener reservas:", error);
+    alert("Hubo un error al obtener las reservas. Intenta nuevamente.");
+  }
+},
+    
     //Este metodo confirma una reserva en base a los datos actuales y lo mete en BDD
     async confirmReservation() {
       try {
@@ -164,11 +248,11 @@ export default {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'email': this.currentUserEmail, // Header email requerido
-        'recurso': recursoSeleccionado, // Header recurso requerido
-        'diaDeLaSemana': this.selectedSlot.day, // Header diaDeLaSemana requerido
-        'tramosHorarios': this.selectedSlot.hour, // Header tramosHorarios requerido
-        'nAlumnos': this.students.toString(), // Header nAlumnos requerido (debe ser string en los headers)
+        'email': this.currentUserEmail,
+        'recurso': recursoSeleccionado,
+        'diaDeLaSemana': this.selectedSlot.day,
+        'tramosHorarios': this.selectedSlot.hour,
+        'nAlumnos': this.students.toString(),
       },
     });
 
@@ -197,17 +281,60 @@ export default {
   }
       this.closeModal();
     },
+
+    //Este metodo borra una reserva de la base de datos
+    async deleteReservationFromDB(day, hour){
+      try{
+        const recursoSeleccionado = document.getElementById("roles").value;
+
+        const response = await fetch('http://localhost:8085/bookings/previous_resources/bookings', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'email': this.currentUserEmail, 
+        'recurso': recursoSeleccionado, 
+        'diaDeLaSemana': day,
+        'tramoHorario': hour,
+      },
+    });
+
+    if (!response.ok) {
+
+      const errorData = await response.json();
+      alert('Error al borrar: ' + (errorData.message || 'Error desconocido.'));
+      return false;
+    }
+    alert('Reserva borrrada');
+      }
+      catch (error) {
+    console.error('Error al conectarse a la API:', error);
+    alert('Hubo un error al conectarse al servidor. Intenta nuevamente más tarde.');
+    return false;
+  }
+    },
+  // Este metodo elimina la reserva de la celda seleccionada
+    async deleteReservation(day, hour) {
+      
+      if (this.reservations[day]?.[hour]) {
+    delete this.reservations[day][hour];
+
+    if (Object.keys(this.reservations[day]).length === 0) {
+      delete this.reservations[day];
+    }
+    await this.deleteReservationFromDB(day, hour);
+  }
+    },
     //Este metodo cierra el popup
   closeModal() {
       this.showModal = false;
     },
   },
   //El metodo mounted ejecuta los metodos de obtencion de datos al iniciar el despliegue
-  mounted() {
-    // Llama a la API cuando el componente se monte
-    this.getResources();
-    this.getTimeRanges()
-    this.getDaysOfTheWeek()
+  async mounted() {
+    await this.getResources();
+    await this.getTimeRanges();
+    await this.getdaysOfTheWeek();
+    await this.getReservationsByResource();
   },
 };
 </script>
